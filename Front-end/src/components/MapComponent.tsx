@@ -8,7 +8,7 @@ export default function MapComponent() {
       <Map controls={[]} interactions={[]}>
         <TileLayer source={new OSM()} />
         <View center={[-10997148, 4569099]} zoom={10} />
-        <PointerInteraction />
+        {/* <PointerInteraction /> */}
       </Map>
     </>
   );
