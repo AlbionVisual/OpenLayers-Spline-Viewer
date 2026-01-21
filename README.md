@@ -114,3 +114,124 @@ PostgreSQL
 ```
 
 ## Решение
+
+Хранение и возвращение простым бэком в Postgre.
+
+Получение во фронте.
+
+Парсинг данных. Мы получаем данные в формате GeoJSON, парсим их, ищем данные с нашим типом "сплайн". Эти данные мы запихиваем в features при помощи `format.readFeatures(geojsondata);`, а затем передаём в качестве фич в VectorSource. Также в style для VectorLayer мы передаём кастомную функцию рендера всех сплайнов. Кастомная функция пока будет использовать встроенные методы bezierCurveTo и quadraticCurveTo для "нативного изображения сплайнов".
+
+### Подсказки, варианты решения:
+
+**Вариант 1: Кастомный стиль с Canvas renderer**
+
+```typescript
+import VectorLayer from 'ol/layer/Vector';
+import VectorSource from 'ol/source/Vector';
+import Feature from 'ol/Feature';
+import { Style, Stroke } from 'ol/style';
+import { toContext } from 'ol/render';
+
+const vectorSource = new VectorSource();
+const feature = new Feature({
+  geometry: new LineString([...])
+});
+
+const customStyle = new Style({
+  renderer: (coords, state) => {
+    const ctx = state.context;
+    const pixelRatio = state.pixelRatio;
+
+    ctx.beginPath();
+    ctx.moveTo(coords[0][0], coords[0][1]);
+
+    ctx.bezierCurveTo(
+      controlPoint1.x, controlPoint1.y,
+      controlPoint2.x, controlPoint2.y,
+      coords[coords.length - 1][0],
+      coords[coords.length - 1][1]
+    );
+
+    ctx.strokeStyle = 'blue';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+});
+
+<VectorLayer
+  source={vectorSource}
+  style={customStyle}
+/>
+```
+
+**Вариант 2: Использование useRef для прямого доступа к карте и добавления Features динамически**
+
+```typescript
+import { useRef, useEffect } from "react";
+import { useMap } from "react-openlayers";
+import VectorSource from "ol/source/Vector";
+import Feature from "ol/Feature";
+import LineString from "ol/geom/LineString";
+
+function BezierCurveLayer() {
+  const map = useMap();
+  const sourceRef = useRef(new VectorSource());
+
+  useEffect(() => {
+    if (!map) return;
+
+    const source = sourceRef.current;
+
+    const bezierFeature = new Feature({
+      geometry: new LineString([
+        [-10997148, 4569099],
+        [-11000000, 4570000],
+        [-10995000, 4571000],
+      ]),
+    });
+
+    source.addFeature(bezierFeature);
+
+    return () => {
+      source.clear();
+    };
+  }, [map]);
+
+  return <VectorLayer source={sourceRef.current} />;
+}
+```
+
+**Передаваемые данные могут выглядеть так:**
+
+```JSON
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString", // или специальный тип для сплайна
+        "coordinates": [
+          [-10997148, 4569099],  // начальная точка
+          [-11000000, 4570000],  // контрольная точка 1
+          [-11005000, 4571000],  // контрольная точка 2 (для bezierCurveTo)
+          [-10995000, 4572000]   // конечная точка
+        ]
+      },
+      "properties": {
+        "curveType": "bezier", // или "quadratic"
+        "controlPoints": [...] // явное указание контрольных точек
+      }
+    }
+  ]
+}
+```
+
+**Парсинг пришедшего JSON:**
+
+```Typescript
+import GeoJSON from 'ol/format/GeoJSON';
+
+const format = new GeoJSON();
+const features = format.readFeatures(geojsonData);
+```
