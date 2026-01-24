@@ -1,65 +1,53 @@
-import { fromLonLat } from "ol/proj";
-import MapComponent from "./MapComponent";
 import type { Feature } from "ol";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import GeoJSON from "ol/format/GeoJSON";
+import { toLonLat } from "ol/proj";
 
-const testGeoJSONData = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      geometry: {
-        type: "LineString", // или специальный тип для сплайна
-        coordinates: [
-          [27.550013, 53.903564], // начальная точка (Минск, центр)
-          [27.552, 53.904], // контрольная точка 1
-          [27.553, 53.902], // контрольная точка 2 (для bezierCurveTo)
-          [27.555, 53.9045], // конечная точка
-        ],
-      },
-      properties: {
-        curveType: "bezier", // "quadratic" | "bezier"
-      },
-    },
-    {
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [27.550013, 53.903564],
-          [27.5515, 53.904],
-          [27.5525, 53.9025],
-          [27.554, 53.9043],
-        ],
-      },
-      properties: {
-        curveType: "bezier",
-      },
-    },
-  ],
-};
+const getGeoJSONData = async (min_lon: number, min_lat: number, max_lon: number, max_lat: number) => {
+    const params = new URLSearchParams({
+        min_lon: min_lon.toString(),
+        min_lat: min_lat.toString(),
+        max_lon: max_lon.toString(),
+        max_lat: max_lat.toString()
+    });
+    const response = await fetch(`http://localhost:5000/curves?${params}`);
+    const data = await response.json();
+    return data;
+}
 
-export default function DataLoader() {
-  const format = useRef<GeoJSON | null>(null);
+export default function useCurvesProvider(initial_min_lon: number = 0, initial_min_lat: number = 0, initial_max_lon: number = 0, initial_max_lat: number = 0) {
+    const [curves, setCurves] = useState<Feature[]>([]);
+    const geojson = useRef(new GeoJSON());
+    const timerLink = useRef<number | null>(null);
 
-  if (format.current == null) {
-    format.current = new GeoJSON();
-  }
-  const [features, setFeatures] = useState<Feature[]>(
-    format.current!.readFeatures(testGeoJSONData, {
-      featureProjection: "EPSG:3857",
-    })
-  );
+    useEffect(() => {
+        getGeoJSONData(initial_min_lon, initial_min_lat, initial_max_lon, initial_max_lat).then(
+            (json_data)=> setCurves(geojson.current.readFeatures(json_data, {
+                dataProjection: "EPSG:4326",
+                featureProjection: "EPSG:3857"
+            }) as Feature[])
+        );
+    }, []);
 
-  //   useEffect(() => {
-  //     if (format.current)
-  //       setFeatures(format.current.readFeatures(testGeoJSONData));
-  //   }, []);
+    const loadCurves = useCallback(
+        async (min_lon: number, min_lat: number, max_lon: number, max_lat: number) => {
+            const data = await getGeoJSONData(min_lon, min_lat, max_lon, max_lat);
+            setCurves(geojson.current.readFeatures(data, {
+                dataProjection: "EPSG:4326",
+                featureProjection: "EPSG:3857"
+            }) as Feature[]);
+        }, [geojson.current]);
 
-  return (
-    <>
-      <MapComponent features={features} />
-    </>
-  );
+    const changeLineOfSight = useCallback((new_min_lon: number, new_min_lat: number, new_max_lon: number, new_max_lat: number) => {
+        if (timerLink.current !== null) {
+            clearTimeout(timerLink.current as number);
+        }
+        timerLink.current = setTimeout(()=>{
+            const [minLonLat, minLatLat] = toLonLat([new_min_lon, new_min_lat]);
+            const [maxLonLat, maxLatLat] = toLonLat([new_max_lon, new_max_lat]);
+            loadCurves(minLonLat, minLatLat, maxLonLat, maxLatLat);
+        }, 1000);
+    }, [loadCurves]);
+    
+    return {curves, changeLineOfSight};
 }

@@ -1,8 +1,7 @@
-import DataLoader from "./components/DataLoader";
-import MapOldVersion from "./components/MapOldVersion";
+import MapController from "./components/MapController";
 
 function App() {
-  return <DataLoader />;
+  return <MapController />;
 }
 
 export default App;
