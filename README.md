@@ -13,18 +13,20 @@
 
 ## Запуск
 
-Запускается три вещи: база данных, бэкенд и фронтенд. Затем заходим на url vite dev server и пользуемся.
+Запускаются три вещи: база данных, бэкенд и фронтенд. Затем заходим на url vite dev server и пользуемся.
+
+### Первый запуск
 
 #### База данных
 
-Необходимо инициализировать базу данных. Для этого нужно активировать скрипт в `Back-end/db-scripts/init-db.sql` в какой-нибудь из баз данных, например:
+Необходимо инициализировать (реинициализировать) базу данных. Для этого нужно активировать скрипт в `Back-end/db-scripts/reinit-db.sql` в какой-нибудь из баз данных, например:
 
 ```
 psql -U postgres -c "CREATE DATABASE postgis_test;"
-psql -U postgres -d postgis_test -f Back-end/db-scripts/init-db.sql
+psql -U postgres -d postgis_test -f Back-end/db-scripts/reinit-db.sql
 ```
 
-В файле `Back-end/.env` нужно установить значение для переменной `DATABASE_URL`. Пример есть в файле `.env.example`. Дефолтные значения (кроме пароля) выглядят так: `DATABASE_URL="postgresql://postgres:password@localhost:5432/postgis_test"`. В качетсве базы данных нужно использовать ту, что создали выше.
+В файле `Back-end/.env` нужно установить значение для переменной `DATABASE_URL`. Пример есть в файле `.env.example`. Дефолтные значения (кроме пароля) выглядят так: `DATABASE_URL="postgresql://postgres:password@localhost:5432/postgis_test"`. В качетсве базы данных нужно использовать ту, в которой исполнялся скрипт. Чтобы проверить работу можно запустить сприпт `usage-exanples.sql`, там есть заполнение таблицы случайными кривыми вокруг Минска, а также примеры вызовов функций.
 
 #### Back-end
 
@@ -56,7 +58,7 @@ npm install
 npm run dev
 ```
 
-## Последующие запуски
+### Последующие запуски
 
 _Для бэкенда_:
 
@@ -79,6 +81,29 @@ cd Front-end
 npm run dev
 ```
 
+### Обновление после pull
+
+```
+psql -U postgres -d postgis_test -f Back-end/db-scripts/reinit-db.sql
+```
+
+```
+cd Back-end
+venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+```
+cd Back-end
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+```
+cd Front-end
+npm install
+```
+
 ## Структура проекта
 
 ```
@@ -91,6 +116,10 @@ Back-end/
     venv/                   # виртуальное окружение
 Front-end/
     src/                    # Основные файлы веб части проекта
+        DataLoader.tsx      # Загрузка и предобработка данных. Тут же есть debounce
+        MapComponent.tsx    # Компонент, в котором происходит магия визуализации. Тут всё, что связано с отображением
+        MapController.tsx   # Компонент, который собирает работу двух файлов вместе
+    App.tsx
     react-openlayers/       # Исходные файлы библиотеки с не очень проработанной документацией
     react-...-readme.md     # README.md файл библиотеки в папке выше
     .gitignore
@@ -115,123 +144,54 @@ PostgreSQL
 
 ## Решение
 
-Хранение и возвращение простым бэком в Postgre.
+### Хранение
 
-Получение во фронте.
+Храним в виде таблицы со столбцами:
+t - curve_type as ENUM ('bezier', 'quadratic')
+с - curve (набор четырёх точек, которые потом будут передаваться в функцию отрисовки в этом же порядке)
+geom_search - индексируемый столбец, который вычисляется, как linestring от c (тут есть проблема 1 описанная ниже)
 
-Парсинг данных. Мы получаем данные в формате GeoJSON, парсим их, ищем данные с нашим типом "сплайн". Эти данные мы запихиваем в features при помощи `format.readFeatures(geojsondata);`, а затем передаём в качестве фич в VectorSource. Также в style для VectorLayer мы передаём кастомную функцию рендера всех сплайнов. Кастомная функция пока будет использовать встроенные методы bezierCurveTo и quadraticCurveTo для "нативного изображения сплайнов".
+Четвёртая точка может быть null, тогда t должен быть 'quadratic', иначе 'bezier'.
 
-### Подсказки, варианты решения:
+Для извлечения и записи данных есть функции:
+insert_biezer_curve(p0_x,p0_y,p1_x,p1_y,p2_x,p2_y,p3_x,p3_y)
+insert_quadratic_curve(p0_x,p0_y,p1_x,p1_y,p2_x,p2_y,p3_x,p3_y)
+get_all_curves_in_bounds(min_lon,min_lat,max_lon,max_lat)
+get_all_curves_as_geojson(min_lon,min_lat,max_lon,max_lat)
+Последняя функция использует приведение при помощи ST_AsGeoJSON объектов типа curve.
 
-**Вариант 1: Кастомный стиль с Canvas renderer**
+### Бэкенд
 
-```typescript
-import VectorLayer from 'ol/layer/Vector';
-import VectorSource from 'ol/source/Vector';
-import Feature from 'ol/Feature';
-import { Style, Stroke } from 'ol/style';
-import { toContext } from 'ol/render';
+Мост между фронтом и бд. Из интересного: делает единственное преобразование с json строкой от бд (добавляет обёртку массиву, чтобы потом можно было легко распарсить встроенной функцией от geojson).
 
-const vectorSource = new VectorSource();
-const feature = new Feature({
-  geometry: new LineString([...])
-});
+### Фронтенд
 
-const customStyle = new Style({
-  renderer: (coords, state) => {
-    const ctx = state.context;
-    const pixelRatio = state.pixelRatio;
+Мы получаем данные в формате GeoJSON, парсим их, ищем данные с нашим типом "сплайн" (точнее должны искать... пока отображаются все пришедшие данные) (Если в properties есть поле curve_type, то это наша кривая, а так она имитирует простую точку для geojson). Эти данные мы запихиваем в features при помощи `format.readFeatures(...);`, а затем передаём в качестве фич в VectorSource. Также в style для VectorLayer мы передаём кастомную функцию рендера всех сплайнов. Кастомная функция пока будет использовать встроенные методы bezierCurveTo и quadraticCurveTo для "нативного изображения сплайнов".
 
-    ctx.beginPath();
-    ctx.moveTo(coords[0][0], coords[0][1]);
+## Результат
 
-    ctx.bezierCurveTo(
-      controlPoint1.x, controlPoint1.y,
-      controlPoint2.x, controlPoint2.y,
-      coords[coords.length - 1][0],
-      coords[coords.length - 1][1]
-    );
+### Стресс-тесты
 
-    ctx.strokeStyle = 'blue';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-});
+Фронтенд при отображении 4000 одностильных сплайнов начинает подлагивать.
 
-<VectorLayer
-  source={vectorSource}
-  style={customStyle}
-/>
-```
+База данных + бэкенд + передача по http (между localhosts) выполняют работу по 4000 сплайнов меньше, чем за секунду (**не было точных тестов, только человеческое восприятие**).
 
-**Вариант 2: Использование useRef для прямого доступа к карте и добавления Features динамически**
+Бэкенд не имеет сложной логики для замера скорости.
 
-```typescript
-import { useRef, useEffect } from "react";
-import { useMap } from "react-openlayers";
-import VectorSource from "ol/source/Vector";
-import Feature from "ol/Feature";
-import LineString from "ol/geom/LineString";
+## Проблемы
 
-function BezierCurveLayer() {
-  const map = useMap();
-  const sourceRef = useRef(new VectorSource());
+### 1. Критерий отображения фигур в OpenLayers
 
-  useEffect(() => {
-    if (!map) return;
+Сам OpenLayers имеет оптимизацию, если точка за границами экрана, то она вообще не рисуется. Это работает как для примитива Point, так и для LineString (только для части линии). Из-за этого, если теряется часть линии или какая-то точка из текущего поля зрения камеры, то кривая перестаёт отображаться полностью, потому что ей нужны абсолютно все данные. Также встаёт проблема с передачей всех данных. Одним из рабочих решений оказалось передавать кривую как точку с properties, где лежат остальные точки, но опять же, если только одна эта точка окажеться за пределами экрана, то вся кривая не отобразиться внутренней логикой openlayers. И тут тоже есть несколько решений: первое (текущее) увеличивать "обзор" камеры искусственно только для передачи этих размеров в бэк, чтобы бд сама просто брала больший радиус и давала больше шансов точке попасть; второе - математическое, можно считать пересечение видимой области с кривой как двух прямоугольников и в качестве основного значения точки передавать центр пересечения, но тут может оказаться больше кривых, чем нужно; также есть третий альтернативный математический вариант, не разобран полностью лежит где-то между двумя предыдущими.
 
-    const source = sourceRef.current;
+### 2. Не созданы вручную quadraticCurveTo и bezierCurveTo
 
-    const bezierFeature = new Feature({
-      geometry: new LineString([
-        [-10997148, 4569099],
-        [-11000000, 4570000],
-        [-10995000, 4571000],
-      ]),
-    });
+Недостаточно требований по заданию
 
-    source.addFeature(bezierFeature);
+### 3. Нельзя создать новый тип geojson
 
-    return () => {
-      source.clear();
-    };
-  }, [map]);
+В решении сплайна нету как нового типа geojson, он имитирован при помощи точки, а также полей properties.
 
-  return <VectorLayer source={sourceRef.current} />;
-}
-```
+### 4. Двойное хранение одних и тех же данных
 
-**Передаваемые данные могут выглядеть так:**
-
-```JSON
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "LineString", // или специальный тип для сплайна
-        "coordinates": [
-          [-10997148, 4569099],  // начальная точка
-          [-11000000, 4570000],  // контрольная точка 1
-          [-11005000, 4571000],  // контрольная точка 2 (для bezierCurveTo)
-          [-10995000, 4572000]   // конечная точка
-        ]
-      },
-      "properties": {
-        "curveType": "bezier", // или "quadratic"
-        "controlPoints": [...] // явное указание контрольных точек
-      }
-    }
-  ]
-}
-```
-
-**Парсинг пришедшего JSON:**
-
-```Typescript
-import GeoJSON from 'ol/format/GeoJSON';
-
-const format = new GeoJSON();
-const features = format.readFeatures(geojsonData);
-```
+В базе данных есть удобный для хранения столбец хранения сплайна, это 4 точки в отдельных полях, а также удобный для индексации столбец с теми же данными. В теории можно совместить их, но тогда начнуться проблемы либо в скорости поиска, либо в скорости вставки / редактирования, либо в удобстве доступа. Сейчас проблемы могут возникнуть в лишнем использовании памяти.
