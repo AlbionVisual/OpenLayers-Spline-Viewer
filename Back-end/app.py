@@ -24,9 +24,11 @@ if not DATABASE_URL:
     )
 
 import asyncpg
-from quart import Quart, jsonify
+from quart import Quart, Response, jsonify, request
+from quart_cors import cors
 
 app = Quart(__name__)
+app = cors(app, allow_origin="*")
 
 async def create_db_pool():
     return await asyncpg.create_pool(DATABASE_URL)
@@ -35,21 +37,27 @@ async def create_db_pool():
 async def initialize():
     app.db_pool = await create_db_pool()
 
-@app.route("/users")
-async def get_users():
-    async with app.db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT name, population FROM cities")
-        users = [{"name": row["name"], "population": row["population"]} for row in rows]
-        return jsonify(users)
-
-@app.route("/users/add/<name>")
-async def add_user(name):
+@app.route("/curves")
+async def get_all_curves():
+    min_lon = request.args.get('min_lon', type=float)
+    min_lat = request.args.get('min_lat', type=float)
+    max_lon = request.args.get('max_lon', type=float)
+    max_lat = request.args.get('max_lat', type=float)
     async with app.db_pool.acquire() as conn:
         try:
-            await conn.execute("INSERT INTO users(name) VALUES($1)", name)
-            return jsonify({"status": "ok"})
+            json_str = await conn.fetchval(
+                "SELECT get_all_curves_as_geojson($1, $2, $3, $4)",
+                min_lon,
+                min_lat,
+                max_lon,
+                max_lat,
+            )
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)})
+            return jsonify({"error": str(e)}), 500
+
+        prefix = '{"type":"FeatureCollection","features":'
+        body = json_str or "[]"
+        return Response(prefix + body + "}", mimetype="application/json")
 
 @app.errorhandler(500)
 async def internal_server_error(e):
