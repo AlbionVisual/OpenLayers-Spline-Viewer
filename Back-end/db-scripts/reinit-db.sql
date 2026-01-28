@@ -11,7 +11,7 @@ drop table if exists curves;
 drop type if exists curve_type;
 drop type if exists curve;
 
-create type curve_type as ENUM ('quadratic','bezier');
+create type curve_type as ENUM ('Quadratic','Bezier');
 
 create type curve as (
     p0 geometry,
@@ -26,15 +26,15 @@ create table curves(
     c curve not null,
     geom_search geometry(LineString,4326) generated always as (
         case
-            when t = 'quadratic' then ST_MakeLine(ARRAY[(c).p0, (c).p1, (c).p2])
-            when t = 'bezier' then ST_MakeLine(ARRAY[(c).p0, (c).p1, (c).p2, (c).p3])
+            when t = 'Quadratic' then ST_MakeLine(ARRAY[(c).p0, (c).p1, (c).p2])
+            when t = 'Bezier' then ST_MakeLine(ARRAY[(c).p0, (c).p1, (c).p2, (c).p3])
             else null
         end
     ) stored,
     constraint check_curve_type check (
         (
-            (t = 'quadratic' and (c).p3 is null) or
-            (t = 'bezier' and (c).p3 is not null)
+            (t = 'Quadratic' and (c).p3 is null) or
+            (t = 'Bezier' and (c).p3 is not null)
         )
         and (c).p0 is not null
         and (c).p1 is not null
@@ -55,7 +55,7 @@ declare
 begin
     insert into curves (t, c)
     values (
-        'bezier',
+        'Bezier',
         ROW(
             ST_SetSRID(ST_MakePoint(p0_lon, p0_lat), 4326),
             ST_SetSRID(ST_MakePoint(p1_lon, p1_lat), 4326),
@@ -79,7 +79,7 @@ declare
 begin
     insert into curves (t, c)
     values (
-        'quadratic',
+        'Quadratic',
         row(
             ST_SetSRID(ST_MakePoint(p0_lon, p0_lat), 4326),
             ST_SetSRID(ST_MakePoint(p1_lon, p1_lat), 4326),
@@ -110,7 +110,7 @@ $$ language plpgsql;
 
 create or replace function ST_AsGeoJSON(curve_instance curve) returns json as $$
 declare
-    curve_type text := case when curve_instance.p3 is null then 'quadratic' else 'bezier' end;
+    curve_type text := case when curve_instance.p3 is null then 'Quadratic' else 'Bezier' end;
     coords json;
 begin
     if curve_instance.p0 is null or curve_instance.p1 is null or curve_instance.p2 is null then
@@ -135,12 +135,8 @@ begin
     return json_build_object(
         'type', 'Feature',
         'geometry', json_build_object(
-            'type', 'Point',
-            'coordinates', json_build_array(ST_X(curve_instance.p0), ST_Y(curve_instance.p0))
-        ),
-        'properties', json_build_object(
-            'curve_type', curve_type,
-            'coords', coords
+            'type', curve_type || 'Curve',
+            'coordinates', coords
         )
     );
 end;

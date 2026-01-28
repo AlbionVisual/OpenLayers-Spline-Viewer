@@ -72,10 +72,10 @@ $$ language plpgsql;
 -- radius_ratio = 1.0 - круг
 -- radius_ratio > 1.0 - вытянутый по долготе (широкий)
 -- radius_ratio < 1.0 - вытянутый по широте (высокий)
-select generate_curves_on_ellipses(27.550013, 53.903564, 0.5, 10.0, 2.5, 3000, 90.0);
+select generate_curves_on_ellipses(27.550013, 53.903564, 0.5, 10.0, 2.5, 300, 90.0);
 
 -- Пример извлечения данных в заданной области (теперь можно просто передать 4 числа)
-select * from get_all_curves_in_bounds(27.550513, 53.893564, 27.551013, 53.913564);
+select * from get_all_curves_in_bounds(22.550513, 52.893564, 29.551013, 54.913564);
 
 -- Примеры для извлечения данных в виде json:
 select ST_AsGeoJSON(c) from curves;

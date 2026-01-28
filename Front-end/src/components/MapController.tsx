@@ -1,16 +1,14 @@
 import MapComponent from "./MapComponent";
 import useCurvesProvider from "./DataLoader";
-import { Map } from "react-openlayers";
+import Map from "ol/Map";
 
-export default function MapController() {
+export default function MapController({map, backendUrl}: {map: Map, backendUrl: string}) {
 
-    const {curves, changeLineOfSight} = useCurvesProvider();
+    const {curves, changeLineOfSight} = useCurvesProvider(backendUrl);
     
     return (
         <>
-            <Map controls={[]}>
-                <MapComponent features={curves} onChangeLineOfSight={changeLineOfSight} />
-            </Map>
+            <MapComponent map={map}features={curves} onChangeLineOfSight={changeLineOfSight} />
         </>
     )
 }
