@@ -11,50 +11,11 @@
 
 Код на GitHub открытый репозиторий. Инструкция запуска работы.
 
-### Замечания
+## Запуск при помощи Docker
 
-Пункт 1 из проблем ниже: нужно bbox использовать
-Пункт 3 из проблем ниже: это один из цимес задачи. нужно хранить как нативный тип данных, там же решается проблема с bbox, там же и делается ST_AsGeoJSON. 
-вот рандомный пример {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": {},
-      "geometry": {
-        "coordinates": [
-          16.2321385424068,
-          19.573390545436794
-        ],
-        "type": "Point"
-      }
-    }
-  ]
-}, а тебе нужно типа {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": {},
-      "geometry": {
-        "coordinates": [
-          16.2321385424068,
-          19.573390545436794,
-          27.691252478
-        ],
-        "type": "quadraticCurve"
-      }
-    }
-  ]
-}
-затем уже в openlayers через import GeoJSON from "ol/format/GeoJSON"; он должен быть прочитан.
-4. ответил в п.3, но если именно про это решение, то можно мульти пойнт юзать
-
-цель остаётся всё так же - нужно нативно оформить
-
-пища для размышления (спросить себя)
-1. как бы посмотреть результат не вводя много команд, мб можно файл оформить и парочкой команд порешать
-2. мне нужно три слоя сделать, а как же лень копировать (https://github.com/AlbionVisual/OpenLayers-Spline-Viewer/blob/main/Front-end/src/components/MapComponent.tsx#L27), чтобы придумать
+```
+docker compose up -d --build
+```
 
 ## Запуск
 
@@ -90,7 +51,7 @@ _linux_
 ```
 cd Back-end
 python -m venv venv
-source venv/Scripts/activate
+source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app:app --reload
 ```
@@ -210,20 +171,22 @@ get_all_curves_as_geojson(min_lon,min_lat,max_lon,max_lat)
 Мост из бд на фронт. Делает область немного шире, чтобы вернуть больше линий (иначе получится приуменьшение количества линий, пока бд не умеет определять точный bbox по точкам). Также оборачивает полученный из бд массив в правильную форму GeoJSON.
 
 Передаём данные в виде стандартного GeoJSON, с добавлением новой "фичи" вида:
+
 ```json
 {
-    "type":"Feature",
-    "geometry": {
-        "type": "BezierCurve",
-        "coordinates": [
-            [1.1,1.2],
-            [1.1,1.2],
-            [1.1,1.2],
-            [1.1,1.2]
-        ]
-    }
+  "type": "Feature",
+  "geometry": {
+    "type": "BezierCurve",
+    "coordinates": [
+      [1.1, 1.2],
+      [1.1, 1.2],
+      [1.1, 1.2],
+      [1.1, 1.2]
+    ]
+  }
 }
 ```
+
 В качестве типа фигуры есть два добавленных варианта: `BezierCurve` и `QuadraticCurve`.
 
 ### Фронтенд

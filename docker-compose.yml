@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  # --- СЕРВИС БАЗЫ ДАННЫХ (PostgreSQL + PostGIS) ---
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile-db # Укажите путь к новому Dockerfile
+    container_name: postgres-dev-db
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # Эти переменные все еще нужны для начальной настройки Docker-образа
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data_volume:/var/lib/postgresql/data
+      - ./backend/init_scripts:/docker-entrypoint-initdb.d
+    ports:
+      # Пробрасываем порт, чтобы можно было подключиться из WSL/Windows, если нужно
+      - "${PG_PORT}:${PG_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- СЕРВИС БЭКЕНДА (Python) ---
+  backend:
+    build:
+      context: ./backend # Путь к папке с Dockerfile и кодом
+      dockerfile: dockerfile
+    container_name: app-container
+    restart: always
+    env_file:
+      - .env # Загружаем переменные окружения
+    environment:
+      # Настраиваем DATABASE_URL для подключения к сервису 'db'
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      - "${APP_PORT}:8000"
+    depends_on:
+      # Гарантируем, что БД запущена ДО того, как мы попытаемся запустить бэкенд
+      db:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    container_name: frontend-container
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    ports:
+      # Пробрасываем порт 80 контейнера на порт 3000 вашей машины (WSL)
+      - "3000:80" 
+    depends_on:
+      # Фронтенд может стартовать одновременно с бэкендом, но если он ждет данных,
+      # можно добавить зависимость от backend.
+      backend:
+        condition: service_started
+volumes:
+  pg_data_volume:

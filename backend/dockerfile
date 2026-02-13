@@ -1,0 +1,33 @@
+# Dockerfile (в ./backend/Dockerfile)
+
+# 1. Базовый образ: Используем официальный образ Python
+FROM python:3.12-slim
+
+# 2. Установка зависимостей ОС (для PostGIS и других библиотек)
+# Устанавливаем psycopg2-binary и другие необходимые инструменты
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    # Если вы используете PostGIS, вам могут понадобиться библиотеки для компиляции
+    # В Python-коде это часто решается через psycopg2-binary, но если нужно что-то сложнее,
+    # можно добавить libgdal-dev и т.д. Для начала оставим только базовые
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Установка рабочей директории внутри контейнера
+WORKDIR /app
+
+# 4. Копирование файла зависимостей и установка
+# Предполагаем, что файл зависимостей называется requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 5. Копирование остального кода приложения
+COPY . .
+
+# 6. Команда, которая будет запущена при старте контейнера
+# Замените 'your_app_command' на реальную команду запуска вашего сервера (например, gunicorn, uvicorn, или manage.py runserver)
+# Пример для Django:
+# CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Пример для FastAPI/Uvicorn:
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# uvicorn app:app --reload

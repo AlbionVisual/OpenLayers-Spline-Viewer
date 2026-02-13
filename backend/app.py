@@ -38,7 +38,8 @@ async def initialize():
     app.db_pool = await create_db_pool()
 
 screen_bbox_offset = 0.005
-max_square = 0.0085
+# max_square = 0.0085
+max_square = 0.019
 
 @app.route("/curves")
 async def get_all_curves():
@@ -47,7 +48,7 @@ async def get_all_curves():
     max_lon = request.args.get('max_lon', type=float) + screen_bbox_offset
     max_lat = request.args.get('max_lat', type=float) + screen_bbox_offset
     square = (max_lon - min_lon) * (max_lat - min_lat)
-    print(min_lon, min_lat, max_lon, max_lat, square)
+    # print(min_lon, min_lat, max_lon, max_lat, square)
     prefix = '{"type":"FeatureCollection","features":'
     if square > max_square:
         return Response(prefix + "[]}", mimetype="application/json")
@@ -64,7 +65,7 @@ async def get_all_curves():
             return jsonify({"error": str(e)}), 500
 
         body = json_str or "[]"
-        print(len(body))
+        # print(len(body))
         return Response(prefix + body + "}", mimetype="application/json")
 
 @app.errorhandler(500)

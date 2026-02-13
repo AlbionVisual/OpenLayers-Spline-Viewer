@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS postgis;
+
 SELECT postgis_full_version();
 
 drop function if exists insert_biezer_curve;
