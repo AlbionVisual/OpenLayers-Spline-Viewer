@@ -27,6 +27,20 @@ class GeoJSON extends OldGeoJSON {
     }
 
     protected readFeatureFromObject(object: GeoJSONGeometry, options?: import("ol/format/Feature").ReadOptions): Feature {
+        if (object.geometry.type === "Curve") {
+            let geometry: Geometry;
+            try{
+                geometry = new QuadraticCurve(object.geometry.coordinates);
+            }
+            catch(error){
+                geometry = new BezierCurve(object.geometry.coordinates);
+            }
+            geometry.transform("EPSG:4326", "EPSG:3857");
+            return new Feature({
+                geometry: geometry as Geometry,
+                properties: object.properties
+            });
+        }
         if (object.geometry.type === "QuadraticCurve") {
             const geometry = new QuadraticCurve(object.geometry.coordinates);
             geometry.transform("EPSG:4326", "EPSG:3857");
