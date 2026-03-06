@@ -1,12 +1,19 @@
-
-FROM postgis/postgis:16-3.4
+FROM postgres:16
 
 RUN apt-get update && apt-get install -y \
-    postgis \
-    postgresql-contrib \
+    build-essential autoconf automake libtool \
+    bison flex libxml2-dev libgeos-dev libproj-dev \
+    libgdal-dev libjson-c-dev postgresql-server-dev-16 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./backend/init_scripts/ /docker-entrypoint-initdb.d/
+COPY ./postgis_source /tmp/postgis_source
+WORKDIR /tmp/postgis_source
+RUN ./autogen.sh && \
+    ./configure --without-protobuf && \
+    make -j$(nproc) && \
+    make install
+
+COPY ./init_scripts/ /docker-entrypoint-initdb.d/
 
 ENV POSTGRES_USER=openlayers
 ENV POSTGRES_PASSWORD=openlayerssplineviewer

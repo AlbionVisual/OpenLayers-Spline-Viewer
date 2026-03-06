@@ -17,7 +17,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pg_data_volume:/var/lib/postgresql/data
-      - ./init_scripts:/docker-entrypoint-initdb.d
+      - ./database/init_scripts:/docker-entrypoint-initdb.d
     ports:
       # Пробрасываем порт, чтобы можно было подключиться из WSL/Windows, если нужно
       - "${PG_PORT}:${PG_PORT}"

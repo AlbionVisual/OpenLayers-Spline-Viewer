@@ -17,105 +17,32 @@
 docker compose up -d --build
 ```
 
-## Запуск
-
-Запускаются три вещи: база данных, бэкенд и фронтенд. Затем заходим на url vite dev server и пользуемся.
-
-### Первый запуск
-
-#### База данных
-
-Необходимо инициализировать (реинициализировать) базу данных. Для этого нужно активировать скрипт в `Back-end/db-scripts/reinit-db.sql` в какой-нибудь из баз данных, например:
+## Структура проекта
 
 ```
-psql -U postgres -c "CREATE DATABASE postgis_test;"
-psql -U postgres -d postgis_test -f Back-end/db-scripts/reinit-db.sql
-```
-
-В файле `Back-end/.env` нужно установить значение для переменной `DATABASE_URL`. Пример есть в файле `.env.example`. Дефолтные значения (кроме пароля) выглядят так: `DATABASE_URL="postgresql://postgres:password@localhost:5432/postgis_test"`. В качетсве базы данных нужно использовать ту, в которой исполнялся скрипт. Чтобы проверить работу можно запустить сприпт `usage-exanples.sql`, там есть заполнение таблицы случайными кривыми вокруг Минска, а также примеры вызовов функций.
-
-#### Back-end
-
-```bash
-cd Back-end
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app:app --reload
-```
-
-#### Front-end
-
-```
-cd Front-end
-npm install
-npm run dev
-```
-
-### Последующие запуски
-
-_Для бэкенда_:
-
-```
-cd Back-end
-source venv/bin/activate
-uvicorn app:app --reload
-```
-
-_Для фронтеда_:
-
-```
-cd Front-end
-npm run dev
-```
-
-### Обновление после pull
-
-```
-psql -U postgres -d postgis_test -f Back-end/db-scripts/reinit-db.sql
-```
-
-```
-cd Back-end
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-```
-cd Back-end
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-```
-cd Front-end
-npm install
-```
-
-## Структура проекта (deprecated)
-
-```
-Back-end/
-    db-scripts/             # sql скрипты для базы данных
-    app.py                  # главный файл бэкенда
-    requirements.txt        # список зависимостей
-    .env.template           # шаблон переменных окружения
+backend/
+    app.py                      # главный (единственный) файл бэкенда
+    requirements.txt            # список зависимостей
+    .env.template               # шаблон переменных окружения
     .gitignore
-    venv/                   # виртуальное окружение
-Front-end/
-    src/                    # Основные файлы веб части проекта
-        DataLoader.tsx      # Загрузка и предобработка данных. Тут же есть debounce
-        MapComponent.tsx    # Компонент, в котором происходит магия визуализации. Тут всё, что связано с отображением
-        MapController.tsx   # Компонент, который собирает работу двух файлов вместе
-    App.tsx
-    react-openlayers/       # Исходные файлы библиотеки с не очень проработанной документацией
-    react-...-readme.md     # README.md файл библиотеки в папке выше
+    dockerfile
+    venv/
+frontend/
+    src/                        # Основные файлы веб части проекта
+        components/
+            DataLoader.tsx      # Загрузка и предобработка данных. Тут же есть debounce
+            MapComponent.tsx    # Компонент, в котором происходит магия визуализации. Тут всё, что связано с отображением
+            MapController.tsx   # Компонент, который собирает работу двух файлов вместе
+        main.tsx
     .gitignore
+    dockerfile
     package.json
-README.md                   # Вы находитесь здесь)
+docker-compose.yml
+.env
+README.md                       # Вы находитесь здесь)
 ```
 
-## Технологии (deprecated)
+## Технологии
 
 ```
 Typescript
@@ -127,73 +54,30 @@ python
     asyncpg                 # мост в postgres
     uvicorn
 PostgreSQL
-    PostGIS
+    C                       # Зависимости исходного кода postgis
+    flex
+    bison
 ```
 
 ## Решение
 
+### БД
+
+Одна показательная таблица и извлекающий метод... и больше ничего. Всё заполняет бэкенд, а потом сам передаёт дальше.
+
 ### PostGIS
 
-#### Перекомпиляция
-
-```bash
-make -j$(nproc)
-sudo make install
-sudo service postgresql restart
+Все дополнения / изменения помечены комментариями вида:
 ```
-
-#### Тест
-
-```bash
-psql
+// AlbionVisual2026
 ```
+Можно сделать поиск по проекту по этой строке. Всего около 100 мест с изменениями для создания одного типа Curve, являющегося почти полной копией LineString.
 
-```sql
-SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1],[2,2]]}'); -- цифры в начале кодируют тип. 0102 это LineString, если это встретилось, то недоработка / ошибка, значит Curve не определился или неправильно сохранился. Если 0110 или 0116 не помню (главное, что не 0102), то всё норм.
+Добавлены имя в системе, методы экспорта, импорта из json / памяти / буфера. Осталось использование структуры LWLINE в качестве основной для кривой (вся сверка идёт по полю LWLINE->type, который переустанавливается везде, где нужно на CurveType, поэтому большую часть логики LineString копировать не пришлось), а также нету ограничения на количество точек, поэтому любое слово LineString в теории можно заменить на Curve.
 
-CREATE TABLE if not exists test_curve AS SELECT 1 as id, ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[5,5],[10,0]]}') as geom; -- хранение данных в виде geometry
- 
-SELECT id, ST_GeometryType(geom), ST_AsText(geom) FROM test_curve; -- смотрим, чтобы Curve отображался как Curve, а не другой тип
+### Бэкенд
 
-SELECT  -- это не работает, т.е. длинну как в LineString мы не увидим
-    ST_Length(geom), 
-    ST_AsText(ST_Envelope(geom)) as bbox 
-FROM (SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1]]}') as geom) as t;
-```
-
-#### Структура
-
-Используемые файлы:
-database/postgis_source/postgis/lwgeom_inout.c
-database/postgis_source/liblwgeom/lwin_wkt_parse.c
-database/postgis_source/liblwgeom/lwin_wkt.c
-database/postgis_source/liblwgeom/lwgeom.c
-database/postgis_source/liblwgeom/gserialized.c
-database/postgis_source/liblwgeom/liblwgeom.h.in
-database/postgis_source/postgis/lwgeom_functions_basic.c
-database/postgis_source/liblwgeom/lwgeom_geos.c
-database/postgis_source/liblwgeom/lwout_geojson.c
-database/postgis_source/liblwgeom/lwout_wkt.c
-
-### Хранение
-
-Храним в виде таблицы со столбцами:
-t - curve_type as ENUM ('bezier', 'quadratic')
-с - curve (набор четырёх точек, которые потом будут передаваться в функцию отрисовки в этом же порядке)
-geom_search - индексируемый столбец, который вычисляется, как linestring от c (тут есть проблема 1 описанная ниже)
-
-Четвёртая точка может быть null, тогда t должен быть 'quadratic', иначе 'bezier'.
-
-Для извлечения и записи данных есть функции:
-insert_biezer_curve(p0_x,p0_y,p1_x,p1_y,p2_x,p2_y,p3_x,p3_y)
-insert_quadratic_curve(p0_x,p0_y,p1_x,p1_y,p2_x,p2_y,p3_x,p3_y)
-get_all_curves_in_bounds(min_lon,min_lat,max_lon,max_lat)
-get_all_curves_as_geojson(min_lon,min_lat,max_lon,max_lat)
-Последняя функция использует приведение при помощи ST_AsGeoJSON объектов типа curve.
-
-### Бэкенд (мост)
-
-Мост из бд на фронт. Делает область немного шире, чтобы вернуть больше линий (иначе получится приуменьшение количества линий, пока бд не умеет определять точный bbox по точкам). Также оборачивает полученный из бд массив в правильную форму GeoJSON.
+Мост из бд на фронт. Делает область немного шире, чтобы вернуть больше линий (иначе получится приуменьшение количества линий, пока бд не умеет определять точный bbox по точкам). Также заполняет бд, если в таблице нету никакой информации.
 
 Передаём данные в виде стандартного GeoJSON, с добавлением новой "фичи" вида:
 
@@ -212,16 +96,144 @@ get_all_curves_as_geojson(min_lon,min_lat,max_lon,max_lat)
 }
 ```
 
-В качестве типа фигуры есть два добавленных варианта: `BezierCurve` и `QuadraticCurve`.
+В качестве типа фигуры есть три добавленных варианта: `BezierCurve`, `QuadraticCurve` и `Curve`. Только с последним знаком postgis пока что.
+
+PostGis знает пока только Curve - это почти полная копия LineString (нет ограничений на количество точек, нельзя использовать wkt для создания типа, можно использовать geojson с `"type": "Curve"`, работает определение пересечения с областью точно также как и в LineString, не работает ST_Length).
 
 ### Фронтенд
 
 Мы получаем данные в формате GeoJSON, парсим их, ищем данные с нашим типом "сплайн" (точнее должны искать... пока отображаются все пришедшие данные). Эти данные мы запихиваем в features, а затем передаём в качестве фич в VectorSource. Также в style для VectorLayer мы передаём кастомную функцию рендера всех сплайнов.
 
-## Проблемы
 
-### 6. Библиотечность решения
+## Запуск по-отдельности
 
-В main.tsx написан js-код, который использует "библиотеку", созданную мною. По хорошему убрать пример, сделать билд и отдельный проект для примера работы решения. В теории для этого достаточно убрать код после комментария "пример исопльзования", сделать билд того, что есть, переложить результат в другой проект в качестве зависимости и исползьовать с тем кодом, который был вырезан.
+Компилируются три вещи: плагин postgis для postgresql и копируется в директорию плагинов postgre, бэкенд и фронтенд. Затем запускаются три сервера / службы, а дальше можно зайти на url vite dev server и пользоваться.
 
-Решение теперь позволяет создавать несколько слоёв, правда разнится они могут пока только в источнике данных. Внутри до сих пор используется react.
+### Первый запуск
+
+#### 1. Компиляция PostGIS
+
+Установка пакетов может разниться в зависимости от дистрибутивов 
+```bash
+apt-get update && apt-get install -y \
+    build-essential autoconf automake libtool \
+    bison flex libxml2-dev libgeos-dev libproj-dev \
+    libgdal-dev libjson-c-dev postgresql-server-dev-16 \
+./autogen.sh
+./configure --without-protobuf
+make -j$(nproc)
+make install
+```
+
+#### 2. База данных
+
+Необходимо инициализировать (реинициализировать) базу данных. Для этого нужно активировать скрипт `database/init_scripts/01-reinit-db.sql` в какой-нибудь из баз данных, например:
+
+```
+psql -U postgres -c "CREATE DATABASE postgis_test;"
+psql -U postgres -d postgis_test -f database/init_scripts/01-reinit-db.sql
+```
+
+В файле `backend/.env` нужно установить значение для переменной `DATABASE_URL`. Пример есть в файле `.env.example`. Дефолтные значения (кроме пароля) выглядят так: `DATABASE_URL="postgresql://postgres:password@localhost:5432/postgis_test"`. В качетсве базы данных нужно использовать ту, в которой исполнялся скрипт.
+
+#### 3. Back-end
+
+```bash
+cd Back-end
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --reload
+```
+
+#### 4. Front-end
+
+```
+cd Front-end
+npm install
+npm run dev
+```
+
+### Компиляция при изменении
+
+1. PostGIS:
+    ```bash
+    make -j$(nproc)
+    make install
+    ```
+    Полезно иногда перезагружать postgresql как службу: `sudo service postgresql restart`
+2+. Остальное перекомпилируется на лету прямо при изменениях.
+
+### Последующие запуски
+
+1. Backend
+    ```
+    cd Back-end
+    source venv/bin/activate
+    uvicorn app:app --reload
+    ```
+2. Frontend
+    ```
+    cd Front-end
+    npm run dev
+    ```
+
+### Проверка работы
+
+#### Postgis
+
+```bash
+sudo su - postgres
+psql
+```
+
+```sql
+SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1],[2,2]]}'); -- цифры в начале кодируют тип. 0102 это LineString, если это встретилось, то недоработка / ошибка, значит Curve не определился или неправильно сохранился. Если 0110 или 0116 не помню (главное, что не 0102), то всё норм.
+```
+
+```sql
+CREATE TABLE if not exists test_curve AS SELECT 1 as id, ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[5,5],[10,0]]}') as geom; -- хранение данных в виде geometry
+ ```
+
+```sql
+SELECT id, ST_GeometryType(geom), ST_AsText(geom) FROM test_curve; -- смотрим, чтобы Curve отображался как Curve, а не другой тип
+```
+
+```sql
+SELECT  -- это не работает, т.е. длинну как в LineString мы не увидим
+    ST_Length(geom), 
+    ST_AsText(ST_Envelope(geom)) as bbox 
+FROM (SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1]]}') as geom) as t;
+```
+
+#### Backend
+
+Дозаполнить случайными данными вокруг Минска:
+
+```bash
+curl "http://localhost:8000/create_test_curves"
+```
+
+Извлечение данных для теста выше:
+
+```bash
+curl "http://localhost:8000/curves?min_lon=27&min_lat=53&max_lon=28&max_lat=54.5"
+```
+
+Извлечение данных для теста из PostGis:
+
+```bash
+curl "http://localhost:8000/curves?min_lon=0.1&min_lat=0.1&max_lon=10&max_lat=10"
+```
+
+## Проблемы / вопросы
+
+### 8. Уточнение требований по фронтенд-решению
+
+Требуется ли сделать очень похожую функциональность слоёв для нового слоя кривых (т.е. по сути сделать аналог VectorLayer для кривых, с возможностью передачи Fetures и других данных)?
+
+Есть ещё идеи: передавать в слой массив Features и отображать только с типом Curve; передавать в слой массив Features и отображать всё, в том числе и кривые (дополнение векторного слоя). 
+
+### 9. Архитектура нового PostGis
+
+Мы добавляем новый тип - кривая. Нужно ли тратить время на безопасномть (выбрасывать ошибки, если вставлено не 3-4 точки; возможно нужно проверять ещё не одинаковость точек)? Нужно ли делить один тип "Curve", который уже сделан, на два "BezierCurve" и "QuadraticCurve" (как будто это можно делать только для того, чтобы не разрешать писать некорректное число точек в json, в остальном хранение идентичное)?

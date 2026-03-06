@@ -22,9 +22,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise ValueError(
-        "DATABASE_URL не установлен! Пожалуйста, создайте файл .env в папке Back-end "
-        "и добавьте строку: DATABASE_URL=postgresql://postgres:password@localhost:5432/postgis_test"
+        "DATABASE_URL не установлен! Пожалуйста, установите переменную окружения DATABASE_URL "
+        "или создайте файл .env в папке бэкенда."
     )
+
+print("DEBUG: Using DATABASE_URL:", DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL)
 
 import asyncpg
 from quart import Quart, Response, jsonify, request
