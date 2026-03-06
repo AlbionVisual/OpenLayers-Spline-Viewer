@@ -4,8 +4,8 @@ services:
   # --- СЕРВИС БАЗЫ ДАННЫХ (PostgreSQL + PostGIS) ---
   db:
     build:
-      context: .
-      dockerfile: Dockerfile-db # Укажите путь к новому Dockerfile
+      context: ./database
+      dockerfile: dockerfile # Укажите путь к новому Dockerfile
     container_name: postgres-dev-db
     restart: always
     env_file:
@@ -17,7 +17,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pg_data_volume:/var/lib/postgresql/data
-      - ./backend/init_scripts:/docker-entrypoint-initdb.d
+      - ./init_scripts:/docker-entrypoint-initdb.d
     ports:
       # Пробрасываем порт, чтобы можно было подключиться из WSL/Windows, если нужно
       - "${PG_PORT}:${PG_PORT}"

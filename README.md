@@ -110,7 +110,7 @@ cd Front-end
 npm install
 ```
 
-## Структура проекта
+## Структура проекта (deprecated)
 
 ```
 Back-end/
@@ -133,7 +133,7 @@ Front-end/
 README.md                   # Вы находитесь здесь)
 ```
 
-## Технологии
+## Технологии (deprecated)
 
 ```
 Typescript
@@ -149,6 +149,49 @@ PostgreSQL
 ```
 
 ## Решение
+
+### PostGIS
+
+#### Перекомпиляция
+
+```bash
+make -j$(nproc)
+sudo make install
+sudo service postgresql restart
+```
+
+#### Тест
+
+```bash
+psql
+```
+
+```sql
+SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1],[2,2]]}'); -- цифры в начале кодируют тип. 0102 это LineString, если это встретилось, то недоработка / ошибка, значит Curve не определился или неправильно сохранился. Если 0110 или 0116 не помню (главное, что не 0102), то всё норм.
+
+CREATE TABLE if not exists test_curve AS SELECT 1 as id, ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[5,5],[10,0]]}') as geom; -- хранение данных в виде geometry
+ 
+SELECT id, ST_GeometryType(geom), ST_AsText(geom) FROM test_curve; -- смотрим, чтобы Curve отображался как Curve, а не другой тип
+
+SELECT  -- это не работает, т.е. длинну как в LineString мы не увидим
+    ST_Length(geom), 
+    ST_AsText(ST_Envelope(geom)) as bbox 
+FROM (SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1]]}') as geom) as t;
+```
+
+#### Структура
+
+Используемые файлы:
+database/postgis_source/postgis/lwgeom_inout.c
+database/postgis_source/liblwgeom/lwin_wkt_parse.c
+database/postgis_source/liblwgeom/lwin_wkt.c
+database/postgis_source/liblwgeom/lwgeom.c
+database/postgis_source/liblwgeom/gserialized.c
+database/postgis_source/liblwgeom/liblwgeom.h.in
+database/postgis_source/postgis/lwgeom_functions_basic.c
+database/postgis_source/liblwgeom/lwgeom_geos.c
+database/postgis_source/liblwgeom/lwout_geojson.c
+database/postgis_source/liblwgeom/lwout_wkt.c
 
 ### Хранение
 
@@ -194,12 +237,6 @@ get_all_curves_as_geojson(min_lon,min_lat,max_lon,max_lat)
 Мы получаем данные в формате GeoJSON, парсим их, ищем данные с нашим типом "сплайн" (точнее должны искать... пока отображаются все пришедшие данные). Эти данные мы запихиваем в features, а затем передаём в качестве фич в VectorSource. Также в style для VectorLayer мы передаём кастомную функцию рендера всех сплайнов.
 
 ## Проблемы
-
-### 4. Двойное хранение одних и тех же данных
-
-В базе данных есть удобный для хранения столбец хранения сплайна, это 4 точки в отдельных полях, а также удобный для индексации столбец с теми же данными. В теории можно совместить их, но тогда начнуться проблемы либо в скорости поиска, либо в скорости вставки / редактирования, либо в удобстве доступа. Сейчас проблемы могут возникнуть в лишнем использовании памяти.
-
-Тут же есть проблема точного понимания, где лежит кривая и какие кривые находятся в области, а какие нет. Нужно математически рассчитать bbox, минимальный, который содержит всю кривую, и это сделать критерием попадания в область.
 
 ### 6. Библиотечность решения
 
