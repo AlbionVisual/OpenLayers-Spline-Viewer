@@ -36,21 +36,9 @@ psql -U postgres -d postgis_test -f Back-end/db-scripts/reinit-db.sql
 
 #### Back-end
 
-_windows_
-
-```
+```bash
 cd Back-end
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app:app --reload
-```
-
-_linux_
-
-```
-cd Back-end
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app:app --reload
@@ -67,12 +55,6 @@ npm run dev
 ### Последующие запуски
 
 _Для бэкенда_:
-
-```
-cd Back-end
-venv\Scripts\activate
-uvicorn app:app --reload
-```
 
 ```
 cd Back-end
