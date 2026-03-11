@@ -808,8 +808,16 @@ LWGEOM* lwgeom_from_wkb_state(wkb_parse_state *s)
             break;
         // AlbionVisual2026
         case CURVETYPE:
-            LWGEOM* lwgeom = (LWGEOM*)lwline_from_wkb_state(s);
-            if (lwgeom) lwgeom->type = CURVETYPE;
+            LWGEOM *lwgeom = (LWGEOM*)lwline_from_wkb_state(s);
+            if (!lwgeom) return NULL;
+            uint32_t npts = lwgeom_as_lwline(lwgeom)->points->npoints;
+            if (npts != 3 && npts != 4)
+            {
+                lwgeom_free(lwgeom);
+                lwerror("Curve must have exactly 3 or 4 points, got %u", npts);
+                return NULL;
+            }
+            lwgeom->type = CURVETYPE;
             return lwgeom;
             break;
 

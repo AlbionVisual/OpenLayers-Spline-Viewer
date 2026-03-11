@@ -1769,9 +1769,9 @@ lwgeom_remove_repeated_points_in_place(LWGEOM *geom, double tolerance)
 	/* No-op! Cannot remove points */
 	case POINTTYPE:
 	case TRIANGLETYPE:
+    // AlbionVisual2026
+    case CURVETYPE: // we don't need to update amount of points
 		return geometry_modified;
-	    // AlbionVisual2026
-    case CURVETYPE:
     case LINETYPE: {
 		LWLINE *g = (LWLINE *)(geom);
 		POINTARRAY *pa = g->points;

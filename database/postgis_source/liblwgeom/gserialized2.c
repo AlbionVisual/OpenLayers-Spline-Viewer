@@ -918,6 +918,14 @@ static size_t gserialized2_from_lwcurve(const LWLINE *line, uint8_t *buf)
 	size_t size;
 	int type = CURVETYPE;
 
+
+    // AlbionVisual2026
+    if (line->points->npoints != 3 && line->points->npoints != 4)
+    {
+        lwerror("gserialized2 (925): Curve must have exactly 3 or 4 points, got %u", line->points->npoints);
+        return 0;
+    }
+
 	assert(line);
 	assert(buf);
 
@@ -1369,9 +1377,17 @@ lwcurve_from_gserialized2_buffer(uint8_t *data_ptr, lwflags_t lwflags, size_t *s
 	line->type = CURVETYPE;
 	line->flags = lwflags;
 
-	data_ptr += 4; /* Skip past the type. */
-	npoints = gserialized2_get_uint32_t(data_ptr); /* Zero => empty geometry */
-	data_ptr += 4; /* Skip past the npoints. */
+	data_ptr += 4;
+	npoints = gserialized2_get_uint32_t(data_ptr);
+	data_ptr += 4;
+
+    // AlbionVisual2026
+    if (npoints != 3 && npoints != 4)
+    {
+        lwfree(line);
+        lwerror("gserialized2 (1388): Curve must have exactly 3 or 4 points, got %u", npoints);
+        return NULL;
+    }
 
 	if (npoints > 0)
 		line->points = ptarray_construct_reference_data(FLAGS_GET_Z(lwflags), FLAGS_GET_M(lwflags), npoints, data_ptr);

@@ -657,6 +657,233 @@ ptarray_calculate_gbox_cartesian(const POINTARRAY *pa, GBOX *gbox)
 	return LW_SUCCESS;
 }
 
+// AlbionVisual2026: THIS ONE IS REAAAALYY BIG:
+
+// AlbionVisual2026
+#define EPSILON 1e-10
+#define IS_EQUAL(num1, num2) (fabs(num1 - num2) < EPSILON)
+#define IS_ZERO(num) (IS_EQUAL(num, 0.0))
+static void ptcurve_minmax_cubic_1d(double p0, double p1, double p2, double p3,
+                                   double *out_min, double *out_max) {
+    double A = -p0+3*p1-3*p2+p3;
+    double B = 2*p0-4*p1+2*p2;
+    double C = -p0+p1;
+    short is_min_max_set = 0;
+
+    if (!IS_ZERO(A))
+    {
+        double discriminant = B*B-4*A*C;
+        if (discriminant >= 0)
+        {
+            double sqrt_discriminant = sqrt(discriminant);
+            double t1 = (-B + sqrt_discriminant) / (2*A);
+            double t2 = (-B - sqrt_discriminant) / (2*A);
+            if (t1 >= 0 && t1 <= 1) {
+                double u = 1.0 - t1;
+                double root1 = u*u*u*p0 + 3*u*u*t1*p1 + 3*u*t1*t1*p2 + t1*t1*t1*p3;
+                *out_min = root1;
+                *out_max = root1;
+                is_min_max_set = 1;
+            }
+            if(t2 >= 0 && t2 <= 1 && !IS_EQUAL(t2, t1)) {
+                double u = 1.0 - t2;
+                double root2 = u*u*u*p0 + 3*u*u*t2*p1 + 3*u*t2*t2*p2 + t2*t2*t2*p3;
+                if (!is_min_max_set) {
+                    *out_min = root2;
+                    *out_max = root2;
+                    is_min_max_set = 1;
+                }
+                else {
+                    *out_min = FP_MIN(*out_min, root2);
+                    *out_max = FP_MAX(*out_max, root2);
+                }
+            }
+        }
+    }
+    else if (!IS_ZERO(B)) {
+        double t1 = -C/B;
+        if (t1 >= 0 && t1 <= 1) {
+            double u = 1.0 - t1;
+            double root = u*u*u*p0 + 3*u*u*t1*p1 + 3*u*t1*t1*p2 + t1*t1*t1*p3;
+            *out_min = *out_max = root;
+            is_min_max_set = 1;
+        }
+    }
+
+    if (is_min_max_set)
+    {
+        *out_min = FP_MIN(*out_min, p0);
+        *out_max = FP_MAX(*out_max, p0);
+        *out_min = FP_MIN(*out_min, p3);
+        *out_max = FP_MAX(*out_max, p3);
+    }
+    else
+    {
+        *out_min = FP_MIN(p0, p3);
+        *out_max = FP_MAX(p0, p3);
+    }
+}
+static void ptcurve_minmax_quad_1d(double p0, double p1, double p2,
+                                    double *out_min, double *out_max){
+    double B = p0-2*p1+p2;
+    short is_min_max_set = 0;
+
+    if (!IS_ZERO(B)) {
+        double t1 = (p0-p1)/B;
+        if (t1 >= 0 && t1 <= 1) {
+            double u = 1.0 - t1;
+            double root = u*u*p0 + 2*u*t1*p1 + t1*t1*p2;
+            *out_min = *out_max = root;
+            is_min_max_set = 1;
+        }
+    }
+
+    if (is_min_max_set)
+    {
+        *out_min = FP_MIN(*out_min, p0);
+        *out_max = FP_MAX(*out_max, p0);
+        *out_min = FP_MIN(*out_min, p2);
+        *out_max = FP_MAX(*out_max, p2);
+    }
+    else
+    {
+        *out_min = FP_MIN(p0, p2);
+        *out_max = FP_MAX(p0, p2);
+    }
+}
+
+
+// AlbionVisual2026
+static void
+ptcurve_calculate_gbox_cartesian_2d(const POINTARRAY *pa, GBOX *gbox)
+{
+    if (pa->npoints < 3)
+        return ptarray_calculate_gbox_cartesian_2d(pa, gbox);
+	const POINT2D *p0 = getPoint2d_cp(pa, 0);
+    const POINT2D *p1 = getPoint2d_cp(pa, 1);
+    const POINT2D *p2 = getPoint2d_cp(pa, 2);
+
+	if (pa->npoints == 4)
+	{
+        const POINT2D *p3 = getPoint2d_cp(pa, 3);
+		ptcurve_minmax_cubic_1d(p0->x, p1->x, p2->x, p3->x, &gbox->xmin, &gbox->xmax);
+		ptcurve_minmax_cubic_1d(p0->y, p1->y, p2->y, p3->y, &gbox->ymin, &gbox->ymax);
+	}
+	else
+	{
+		ptcurve_minmax_quad_1d(p0->x, p1->x, p2->x, &gbox->xmin, &gbox->xmax);
+		ptcurve_minmax_quad_1d(p0->y, p1->y, p2->y, &gbox->ymin, &gbox->ymax);
+	}
+}
+
+// AlbionVisual2026
+static void
+ptcurve_calculate_gbox_cartesian_3d(const POINTARRAY *pa, GBOX *gbox)
+{
+    if (pa->npoints < 3)
+        return ptarray_calculate_gbox_cartesian_3d(pa, gbox);
+    const POINT3D *p0 = getPoint3d_cp(pa, 0);
+    const POINT3D *p1 = getPoint3d_cp(pa, 1);
+    const POINT3D *p2 = getPoint3d_cp(pa, 2);
+
+	if (pa->npoints == 4)
+	{
+        const POINT3D *p3 = getPoint3d_cp(pa, 3);
+		ptcurve_minmax_cubic_1d(p0->x, p1->x, p2->x, p3->x, &gbox->xmin, &gbox->xmax);
+		ptcurve_minmax_cubic_1d(p0->y, p1->y, p2->y, p3->y, &gbox->ymin, &gbox->ymax);
+		ptcurve_minmax_cubic_1d(p0->z, p1->z, p2->z, p3->z, &gbox->zmin, &gbox->zmax);
+	}
+	else
+	{
+		ptcurve_minmax_quad_1d(p0->x, p1->x, p2->x, &gbox->xmin, &gbox->xmax);
+		ptcurve_minmax_quad_1d(p0->y, p1->y, p2->y, &gbox->ymin, &gbox->ymax);
+		ptcurve_minmax_quad_1d(p0->z, p1->z, p2->z, &gbox->zmin, &gbox->zmax);
+	}
+}
+
+// AlbionVisual2026
+static void
+ptcurve_calculate_gbox_cartesian_4d(const POINTARRAY *pa, GBOX *gbox)
+{
+    if (pa->npoints < 3)
+        return ptarray_calculate_gbox_cartesian_4d(pa, gbox);
+	const POINT4D *p0 = getPoint4d_cp(pa, 0);
+    const POINT4D *p1 = getPoint4d_cp(pa, 1);
+    const POINT4D *p2 = getPoint4d_cp(pa, 2);
+
+	if (pa->npoints == 4)
+	{
+        const POINT4D *p3 = getPoint4d_cp(pa, 3);
+		ptcurve_minmax_cubic_1d(p0->x, p1->x, p2->x, p3->x, &gbox->xmin, &gbox->xmax);
+		ptcurve_minmax_cubic_1d(p0->y, p1->y, p2->y, p3->y, &gbox->ymin, &gbox->ymax);
+		ptcurve_minmax_cubic_1d(p0->z, p1->z, p2->z, p3->z, &gbox->zmin, &gbox->zmax);
+		ptcurve_minmax_cubic_1d(p0->m, p1->m, p2->m, p3->m, &gbox->mmin, &gbox->mmax);
+	}
+	else
+	{
+		ptcurve_minmax_quad_1d(p0->x, p1->x, p2->x, &gbox->xmin, &gbox->xmax);
+		ptcurve_minmax_quad_1d(p0->y, p1->y, p2->y, &gbox->ymin, &gbox->ymax);
+		ptcurve_minmax_quad_1d(p0->z, p1->z, p2->z, &gbox->zmin, &gbox->zmax);
+		ptcurve_minmax_quad_1d(p0->m, p1->m, p2->m, &gbox->mmin, &gbox->mmax);
+	}
+}
+
+// AlbionVisual2026
+int
+ptcurve_calculate_gbox_cartesian(const POINTARRAY *pa, GBOX *gbox)
+{
+	if (!pa || pa->npoints == 0)
+		return LW_FAILURE;
+	if (!gbox)
+		return LW_FAILURE;
+
+	int has_z = FLAGS_GET_Z(pa->flags);
+	int has_m = FLAGS_GET_M(pa->flags);
+	gbox->flags = lwflags(has_z, has_m, 0);
+	LWDEBUGF(4, "ptarray_calculate_gbox Z: %d M: %d", has_z, has_m);
+	int coordinates = 2 + has_z + has_m;
+
+	switch (coordinates)
+	{
+	case 2:
+	{
+		ptcurve_calculate_gbox_cartesian_2d(pa, gbox);
+		break;
+	}
+	case 3:
+	{
+		if (has_z)
+		{
+			ptcurve_calculate_gbox_cartesian_3d(pa, gbox);
+		}
+		else
+		{
+			double zmin = gbox->zmin;
+			double zmax = gbox->zmax;
+			ptcurve_calculate_gbox_cartesian_3d(pa, gbox);
+			gbox->mmin = gbox->zmin;
+			gbox->mmax = gbox->zmax;
+			gbox->zmin = zmin;
+			gbox->zmax = zmax;
+		}
+		break;
+	}
+	default:
+	{
+		ptcurve_calculate_gbox_cartesian_4d(pa, gbox);
+		break;
+	}
+	}
+	return LW_SUCCESS;
+}
+// End of edit AlbionVisual2026
+
+
+
+
+
+
+
 static int lwcircstring_calculate_gbox_cartesian(LWCIRCSTRING *curve, GBOX *gbox)
 {
 	GBOX tmp = {0};
@@ -698,6 +925,12 @@ static int lwline_calculate_gbox_cartesian(LWLINE *line, GBOX *gbox)
 {
 	if ( ! line ) return LW_FAILURE;
 	return ptarray_calculate_gbox_cartesian( line->points, gbox );
+}
+
+static int lwcurve_calculate_gbox_cartesian(LWLINE *line, GBOX *gbox)
+{
+	if ( ! line ) return LW_FAILURE;
+	return ptcurve_calculate_gbox_cartesian( line->points, gbox );
 }
 
 static int lwtriangle_calculate_gbox_cartesian(LWTRIANGLE *triangle, GBOX *gbox)
@@ -760,6 +993,7 @@ int lwgeom_calculate_gbox_cartesian(const LWGEOM *lwgeom, GBOX *gbox)
 		return lwpoint_calculate_gbox_cartesian((LWPOINT *)lwgeom, gbox);
     // AlbionVisual2026
     case CURVETYPE:
+        return lwcurve_calculate_gbox_cartesian((LWLINE *)lwgeom, gbox);
 	case LINETYPE:
 		return lwline_calculate_gbox_cartesian((LWLINE *)lwgeom, gbox);
 	case CIRCSTRINGTYPE:

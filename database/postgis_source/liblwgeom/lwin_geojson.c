@@ -186,6 +186,14 @@ parse_geojson_curve(json_object *geojson, int *hasz)
 		json_object *coords = json_object_array_get_idx(points, i);
 		parse_geojson_coord(coords, hasz, pa);
 	}
+    // AlbionVisual2026
+    // Check if the curve has exactly 3 or 4 points
+    if (nPoints != 3 && nPoints != 4)
+    {
+        ptarray_free(pa);
+        lwerror("parse_geojson_curve (194): Curve must have exactly 3 or 4 points, got %d", nPoints);
+        return NULL;
+    }
 	LWLINE *line = lwline_construct(0, NULL, pa);
 	line->type = CURVETYPE;
 	return (LWGEOM *)line;

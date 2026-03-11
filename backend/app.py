@@ -66,8 +66,10 @@ async def get_all_curves():
                 max_lat,
             )
         except Exception as e:
+            print("ERROR GETTING CURVES", e)
             return jsonify({"error": str(e)}), 500
         if len(json_str) <= len("{\"type\" : \"FeatureCollection\", \"features\":[]}") + 5:
+            print("creating curves")
             mess, code = await create_test_curves_function()
             if code != 200:
                 print("ERROR CREATEING",mess, code)

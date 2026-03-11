@@ -168,13 +168,13 @@ npm run dev
 
 1. Backend
     ```
-    cd Back-end
+    cd backend
     source venv/bin/activate
     uvicorn app:app --reload
     ```
 2. Frontend
     ```
-    cd Front-end
+    cd frontend
     npm run dev
     ```
 
@@ -186,14 +186,25 @@ npm run dev
 sudo su - postgres
 psql
 ```
-
-```sql
-SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1],[2,2]]}'); -- цифры в начале кодируют тип. 0102 это LineString, если это встретилось, то недоработка / ошибка, значит Curve не определился или неправильно сохранился. Если 0110 или 0116 не помню (главное, что не 0102), то всё норм.
+Либо можно подключиться от пользователя, который создан для бэкенда:
+```bash
+psql -h localhost -U openlayers -d postgis_test
 ```
 
 ```sql
-CREATE TABLE if not exists test_curve AS SELECT 1 as id, ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[5,5],[10,0]]}') as geom; -- хранение данных в виде geometry
- ```
+SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1],[2,2]]}'); -- цифры в начале кодируют тип. 0102 это LineString, если это встретилось, то недоработка / ошибка, значит Curve не определился или неправильно сохранился. Если 0114 то всё норм, установлен новый тип.
+```
+
+```sql
+DROP TABLE IF EXISTS test_curve;
+CREATE TABLE test_curve (id serial, geom geometry(Curve, 4326)); -- хранение данных в виде geometry
+```
+
+```sql
+INSERT INTO test_curve (geom) VALUES 
+  (ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[5,5],[10,0]]}')),
+  (ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[1,1],[2,4],[7,4],[8,1]]}')); -- просто вставить, побаловаться
+```
 
 ```sql
 SELECT id, ST_GeometryType(geom), ST_AsText(geom) FROM test_curve; -- смотрим, чтобы Curve отображался как Curve, а не другой тип
@@ -204,6 +215,10 @@ SELECT  -- это не работает, т.е. длинну как в LineStrin
     ST_Length(geom), 
     ST_AsText(ST_Envelope(geom)) as bbox 
 FROM (SELECT ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[1,1]]}') as geom) as t;
+```
+
+```sql
+SELECT id, ST_GeometryType(geom), ST_AsText(geom) FROM figures where geom && ST_MakeEnvelope(53.8,27,54,28);
 ```
 
 #### Backend
@@ -226,6 +241,18 @@ curl "http://localhost:8000/curves?min_lon=27&min_lat=53&max_lon=28&max_lat=54.5
 curl "http://localhost:8000/curves?min_lon=0.1&min_lat=0.1&max_lon=10&max_lat=10"
 ```
 
+Выдать права, если пропадут:
+```bash
+sudo su - postgres
+psql
+```
+```psql
+\c postgis_test
+GRANT SELECT, INSERT, UPDATE, DELETE ON figures TO openlayers;
+GRANT USAGE, SELECT ON SEQUENCE figures_id_seq TO openlayers;
+GRANT EXECUTE ON FUNCTION get_all_curves_as_geojson(float8, float8, float8, float8) TO openlayers;
+```
+
 ## Проблемы / вопросы
 
 ### 8. Уточнение требований по фронтенд-решению
@@ -241,3 +268,7 @@ curl "http://localhost:8000/curves?min_lon=0.1&min_lat=0.1&max_lon=10&max_lat=10
 ### 10. Задача поиска пересечения
 
 Ещё была нетронута часть поиска пересечения области с кривой, она по умолчанию использует функцию для LineString. Это отдельная задача, которую можно решить разными методами, задача здесь сделать, чтобы работало точно / красиво, или потратить время и перебрать разные методы для нахождения наилучшего? Возможно есть предел производительности, которого нужно достигнуть?
+
+### 11. Нету реализации большого числа методов LineString
+
+Нашёл много методов работы с кривой в самой бд, нужно ли нам иметь поддержку таких (изменить число точек, изменить какую-то точку, выбрать подмассив точек, удалить дубликаты, "интерполяция" и т.д.)?

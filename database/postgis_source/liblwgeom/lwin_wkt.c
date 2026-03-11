@@ -381,24 +381,30 @@ LWGEOM* wkt_parser_linestring_new(POINTARRAY *pa, char *dimensionality)
 
 // AlbionVisual2026
 /**
-* Create a new curve (AlbionVisual2026) (just copies logic of linestring). Null point array implies empty.
-* Null dimensionality implies no specified dimensionality in the WKT. Check for numpoints >= 2 if
-* requested.
+* Create a new curve (AlbionVisual2026) (just copies logic of linestring)
 */
 LWGEOM* wkt_parser_curve_new(POINTARRAY *pa, char *dimensionality)
 {
 	lwflags_t flags = wkt_dimensionality(dimensionality);
 	LWDEBUG(4,"entered");
 
-	/* No pointarray means it is empty */
-	if( ! pa )
+    // AlbionVisual2026
+    if (pa->npoints != 3 && pa->npoints != 4)
     {
-        LWGEOM* geom = lwline_as_lwgeom(lwline_construct_empty(SRID_UNKNOWN, FLAGS_GET_Z(flags), FLAGS_GET_M(flags)));
-        if (geom) {
-            geom->type = CURVETYPE;
-        }
-        return geom;
+        ptarray_free(pa);
+        SET_PARSER_ERROR(PARSER_ERROR_MOREPOINTS);
+        return NULL;
     }
+
+	// /* No pointarray means it is empty */
+	// if( ! pa )
+    // {
+    //     LWGEOM* geom = lwline_as_lwgeom(lwline_construct_empty(SRID_UNKNOWN, FLAGS_GET_Z(flags), FLAGS_GET_M(flags)));
+    //     if (geom) {
+    //         geom->type = CURVETYPE;
+    //     }
+    //     return geom;
+    // }
 	/* If the number of dimensions is not consistent, we have a problem. */
 	if( wkt_pointarray_dimensionality(pa, flags) == LW_FALSE )
 	{
