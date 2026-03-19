@@ -13,13 +13,6 @@ export default function MapUpdater({ onChangeLineOfSight }: MapUpdaterProps) {
 
   const map = useMap();
 
-//   useMemo(() => {
-//     if (vectorSourceRef.current) {
-//       vectorSourceRef.current.clear();
-//       vectorSourceRef.current.addFeatures(features);
-//     }
-//   }, [features]);
-
   const handleMoveEnd = useCallback(()=>{
     const view = map?.getView();
     const extent = view?.calculateExtent(map?.getSize());
