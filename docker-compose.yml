@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # --- СЕРВИС БАЗЫ ДАННЫХ (PostgreSQL + PostGIS) ---
   db:
@@ -22,10 +20,11 @@ services:
       # Пробрасываем порт, чтобы можно было подключиться из WSL/Windows, если нужно
       - "${PG_PORT}:${PG_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 60s
 
   # --- СЕРВИС БЭКЕНДА (Python) ---
   backend:

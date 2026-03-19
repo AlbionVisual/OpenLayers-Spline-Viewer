@@ -17,6 +17,7 @@ else:
 
 import math
 import random
+import traceback
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -58,21 +59,22 @@ async def get_all_curves():
     #     return Response("{\"type\":\"FeatureCollection\",\"features\":[]}", mimetype="application/json")
     async with app.db_pool.acquire() as conn:
         try:
+            amount = await conn.fetchval("Select count(*) from figures")
+            if int(amount) == 0:
+                print("creating curves")
+                mess, code = await create_test_curves_function()
+                if code != 200:
+                    print("ERROR CREATING curves, HTTP", code)
             json_str = await conn.fetchval(
-                "SELECT * from get_all_curves_as_geojson($1::float8, $2::float8, $3::float8, $4::float8)",
+                "SELECT get_all_curves_as_geojson($1::float8, $2::float8, $3::float8, $4::float8)",
                 min_lon,
                 min_lat,
                 max_lon,
                 max_lat,
             )
         except Exception as e:
-            print("ERROR GETTING CURVES", e)
+            print("ERROR GETTING FIGURES", e)
             return jsonify({"error": str(e)}), 500
-        if len(json_str) <= len("{\"type\" : \"FeatureCollection\", \"features\":[]}") + 5:
-            print("creating curves")
-            mess, code = await create_test_curves_function()
-            if code != 200:
-                print("ERROR CREATEING",mess, code)
 
         return Response(json_str, mimetype="application/json")
     
@@ -101,20 +103,18 @@ async def create_test_curves_function():
                 radius_lon_deg = radius_km / km_per_deg_lon * radius_ratio
                 start_angle = random.random() * 360.0
 
-                if random.random() < 0.5:
-                    # Quadratic curve (3 points)
+                kind = random.choice(["quadratic", "bezier", "linestring", "polygon"])
+
+                if kind == "quadratic":
                     angle_rad = math.radians(start_angle)
                     p0_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p0_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     angle_rad = math.radians(start_angle + arc_degrees / 4.0)
                     p1_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p1_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     angle_rad = math.radians(start_angle + arc_degrees / 2.0)
                     p2_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p2_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     await conn.execute(
                         """
                         INSERT INTO figures (geom)
@@ -122,7 +122,7 @@ async def create_test_curves_function():
                             ST_GeomFromGeoJSON(
                                 json_build_object(
                                     'type', 'Curve',
-                                    'coordinates', 
+                                    'coordinates',
                                     json_build_array(
                                         json_build_array($1::float8, $2::float8),
                                         json_build_array($3::float8, $4::float8),
@@ -134,24 +134,19 @@ async def create_test_curves_function():
                         """,
                         p0_lon, p0_lat, p1_lon, p1_lat, p2_lon, p2_lat
                     )
-                else:
-                    # Bezier curve (4 points)
+                elif kind == "bezier":
                     angle_rad = math.radians(start_angle)
                     p0_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p0_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     angle_rad = math.radians(start_angle + arc_degrees / 3.0)
                     p1_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p1_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     angle_rad = math.radians(start_angle + 2.0 * arc_degrees / 3.0)
                     p2_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p2_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     angle_rad = math.radians(start_angle + arc_degrees)
                     p3_lon = center_lon + radius_lon_deg * math.cos(angle_rad)
                     p3_lat = center_lat + radius_lat_deg * math.sin(angle_rad)
-
                     await conn.execute(
                         """
                         INSERT INTO figures (geom)
@@ -159,7 +154,7 @@ async def create_test_curves_function():
                             ST_GeomFromGeoJSON(
                                 json_build_object(
                                     'type', 'Curve',
-                                    'coordinates', 
+                                    'coordinates',
                                     json_build_array(
                                         json_build_array($1::float8, $2::float8),
                                         json_build_array($3::float8, $4::float8),
@@ -172,8 +167,46 @@ async def create_test_curves_function():
                         """,
                         p0_lon, p0_lat, p1_lon, p1_lat, p2_lon, p2_lat, p3_lon, p3_lat
                     )
+                elif kind == "linestring":
+                    n = random.randint(3, 8)
+                    angles = [start_angle + (arc_degrees * i / (n - 1)) for i in range(n)]
+                    coords = []
+                    for a in angles:
+                        ar = math.radians(a)
+                        coords.append([
+                            center_lon + radius_lon_deg * math.cos(ar),
+                            center_lat + radius_lat_deg * math.sin(ar)
+                        ])
+                    coords_json = "[" + ",".join(f"[{c[0]},{c[1]}]" for c in coords) + "]"
+                    geojson = '{"type":"LineString","coordinates":' + coords_json + "}"
+                    await conn.execute(
+                        "INSERT INTO figures (geom) VALUES (ST_GeomFromGeoJSON($1))",
+                        geojson
+                    )
+                else:
+                    n = random.randint(4, 6)
+                    angles = [start_angle + (360.0 * i / n) for i in range(n)]
+                    coords = []
+                    for a in angles:
+                        ar = math.radians(a)
+                        coords.append([
+                            center_lon + radius_lon_deg * math.cos(ar),
+                            center_lat + radius_lat_deg * math.sin(ar)
+                        ])
+                    coords.append(coords[0])
+                    ring_json = "[" + ",".join(f"[{c[0]},{c[1]}]" for c in coords) + "]"
+                    geojson = '{"type":"Polygon","coordinates":[' + ring_json + "]}"
+                    await conn.execute(
+                        "INSERT INTO figures (geom) VALUES (ST_GeomFromGeoJSON($1))",
+                        geojson
+                    )
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            traceback.print_exc()
+            err = str(e)
+            detail = getattr(e, "sqlstate", None) or getattr(e, "detail", None)
+            if detail:
+                err = err + " | " + str(detail)
+            return jsonify({"error": err}), 500
     return jsonify({"message": "Test curves created"}), 200
 
 @app.errorhandler(500)

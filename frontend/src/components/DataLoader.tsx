@@ -1,65 +1,9 @@
+// Загрузка и обновление данных из бэкенда
 import Feature from "ol/Feature";
 import { useState, useEffect, useRef, useCallback } from "react";
-import OldGeoJSON, { type GeoJSONGeometry } from "ol/format/GeoJSON";
 import { toLonLat } from "ol/proj";
-import { Geometry, LineString } from "ol/geom";
+import { GeoJSON } from "../lib/index";
 
-export class QuadraticCurve extends LineString implements Geometry {
-    constructor(points: number[][]) {
-        if (points.length !== 3) {
-            throw new Error("QuadraticCurve must have 3 points");
-        }
-        super(points);
-    }
-}
-export class BezierCurve extends LineString implements Geometry {
-    constructor(points: number[][]) {
-        if (points.length !== 4) {
-            throw new Error("BezierCurve must have 4 points");
-        }
-        super(points);
-    }
-}
-
-class GeoJSON extends OldGeoJSON {
-    constructor() {
-        super();
-    }
-
-    protected readFeatureFromObject(object: GeoJSONGeometry, options?: import("ol/format/Feature").ReadOptions): Feature {
-        if (object.geometry.type === "Curve") {
-            let geometry: Geometry;
-            try{
-                geometry = new QuadraticCurve(object.geometry.coordinates);
-            }
-            catch(error){
-                geometry = new BezierCurve(object.geometry.coordinates);
-            }
-            geometry.transform("EPSG:4326", "EPSG:3857");
-            return new Feature({
-                geometry: geometry as Geometry,
-                properties: object.properties
-            });
-        }
-        if (object.geometry.type === "QuadraticCurve") {
-            const geometry = new QuadraticCurve(object.geometry.coordinates);
-            geometry.transform("EPSG:4326", "EPSG:3857");
-            return new Feature({
-                geometry: geometry,
-                properties: object.properties
-            });
-        } else if (object.geometry.type === "BezierCurve") {
-            const geometry = new BezierCurve(object.geometry.coordinates);
-            geometry.transform("EPSG:4326", "EPSG:3857");
-            return new Feature({
-                geometry: geometry,
-                properties: object.properties
-            });
-        }
-
-       return super.readFeatureFromObject(object, options) as Feature;
-    }
-}
 
 const getGeoJSONData = async (min_lon: number, min_lat: number, max_lon: number, max_lat: number, backendUrl: string = "http://localhost:8000/curves") => {
     const params = new URLSearchParams({
@@ -73,21 +17,21 @@ const getGeoJSONData = async (min_lon: number, min_lat: number, max_lon: number,
     return data;
 }
 
-export default function useCurvesProvider(backendUrl: string = "http://localhost:8000/curves",initial_min_lon: number = 0, initial_min_lat: number = 0, initial_max_lon: number = 0, initial_max_lat: number = 0) {
-    const [curves, setCurves] = useState<Feature[]>([]);
+export default function useFeaturesProvider(backendUrl: string = "http://localhost:8000/curves",initial_min_lon: number = 0, initial_min_lat: number = 0, initial_max_lon: number = 0, initial_max_lat: number = 0) {
+    const [features, setFeatures] = useState<Feature[]>([]);
     const geojson = useRef(new GeoJSON());
     const timerLink = useRef<number | null>(null);
 
     useEffect(() => {
         getGeoJSONData(initial_min_lon, initial_min_lat, initial_max_lon, initial_max_lat, backendUrl).then(
-            (json_data)=> setCurves(geojson.current.readFeatures(json_data) as Feature[])
+            (json_data)=> setFeatures(geojson.current.readFeatures(json_data) as Feature[])
         );
     }, [backendUrl]);
 
-    const loadCurves = useCallback(
+    const loadFeatures = useCallback(
         async (min_lon: number, min_lat: number, max_lon: number, max_lat: number) => {
             const data = await getGeoJSONData(min_lon, min_lat, max_lon, max_lat, backendUrl);
-            setCurves(geojson.current.readFeatures(data) as Feature[]);
+            setFeatures(geojson.current.readFeatures(data) as Feature[]);
         }, [geojson.current, backendUrl]);
 
     const changeLineOfSight = useCallback((new_min_lon: number, new_min_lat: number, new_max_lon: number, new_max_lat: number) => {
@@ -97,9 +41,9 @@ export default function useCurvesProvider(backendUrl: string = "http://localhost
         timerLink.current = setTimeout(()=>{
             const [minLonLat, minLatLat] = toLonLat([new_min_lon, new_min_lat]);
             const [maxLonLat, maxLatLat] = toLonLat([new_max_lon, new_max_lat]);
-            loadCurves(minLonLat, minLatLat, maxLonLat, maxLatLat);
+            loadFeatures(minLonLat, minLatLat, maxLonLat, maxLatLat);
         }, 1000);
-    }, [loadCurves]);
+    }, [loadFeatures]);
     
-    return {curves, changeLineOfSight};
+    return {features, changeLineOfSight};
 }

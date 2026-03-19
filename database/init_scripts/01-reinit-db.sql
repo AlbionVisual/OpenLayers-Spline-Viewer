@@ -1,15 +1,15 @@
 create extension if not exists postgis;
 
-drop function if exists get_all_curves_as_geojson;
+drop function if exists get_all_curves_as_geojson(float8, float8, float8, float8);
+drop function if exists get_all_figures_as_geojson(float8, float8, float8, float8);
 
 drop table if exists figures;
 create table figures (
     id serial primary key,
-    geom geometry(Curve, 4326)
+    geom geometry(Geometry, 4326)
 );
 
-drop function if exists get_all_curves_as_geojson;
-create or replace function get_all_curves_as_geojson(min_lon float8, min_lat float8, max_lon float8, max_lat float8) returns json as $$
+create or replace function get_all_figures_as_geojson(min_lon float8, min_lat float8, max_lon float8, max_lat float8) returns json as $$
 begin
     return (
         select json_build_object(
@@ -27,6 +27,21 @@ begin
 end;
 $$ language plpgsql;
 
-select get_all_curves_as_geojson(0, 0, 10, 10);
+create or replace function get_all_curves_as_geojson(min_lon float8, min_lat float8, max_lon float8, max_lat float8) returns json as $curves$
+begin
+    return get_all_figures_as_geojson(min_lon, min_lat, max_lon, max_lat);
+end;
+$curves$ language plpgsql;
 
-insert into figures (geom) values (ST_GeomFromGeoJSON('{"type":"Curve","coordinates":[[0,0],[5,5],[10,0]]}'));
+do $grants$
+begin
+    if exists (select 1 from pg_roles where rolname = 'openlayers') then
+        grant select, insert, update, delete on figures to openlayers;
+        grant usage, select on sequence figures_id_seq to openlayers;
+        grant execute on function get_all_figures_as_geojson(float8, float8, float8, float8) to openlayers;
+        grant execute on function get_all_curves_as_geojson(float8, float8, float8, float8) to openlayers;
+    end if;
+end
+$grants$;
+
+select get_all_figures_as_geojson(0, 0, 10, 10);
